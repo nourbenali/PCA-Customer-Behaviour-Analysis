@@ -1,0 +1,907 @@
+---
+title: "Analyse Du Comportement Des Consommateurs Tunisiens Vis-à-vis La Mode "
+author: "Nour ElHouda Ben Ali"
+output: html_document
+date: "2022-12-25"
+---
+# Présentation Du Questionnaire 
+Ce questionnaire a été réalisé dans le cadre d'un projet académique pour la 
+matière Analyse De Données dédiée aux étudiants du "M1 Big Data, Intelligence
+Artificielle" au sein l'Université Paris Dauphine|Tunis.
+
+Le questionnaire comporte plusieurs questions afin de 
+comprendre le comportement des consommateurs tunisiens vis-à-vis la mode.
+
+# ACP Normée
+## L'objectif De L'ACP
+
+L’ACP permet de décrire un jeu de données, de le résumer, d’en réduire la dimensionnalité. L’ACP réalisée sur les individus du tableau de données répond à différentes questions :
+
+* Etude des individus (i.e. les consommateurs) : deux consommateurs sont proches s’ils ont des résultats similaires. On s’intéresse à la variabilité entre individus. Y a-t-il des similarités entre les individus pour toutes les 
+variables ? Peut-on établir des profils de consommateurs ? Peut-on opposer un groupe d’individus à un autre ?
+
+* Etude des variables (i.e. des comportements) : on étudie les liaisons 
+linéaires entre les variables. Les objectifs sont de résumer la matrice des corrélations et de chercher des variables synthétiques: peut-on résumer les comportements des consommateurs par un petit nombre de variables ?
+
+* Lien entre les deux études : peut-on caractériser des groups d’individus par des variables ?
+
+L'ACP comporte plusieurs parties : 
+
+* Fréquence d'achat
+
+* Style vestimentaire
+
+* Les critères d'achat
+
+* Les vêtements les plus occurants chez les consommateurs
+
+## Importation Et Exploration Des données
+On commence tout d'abord par importer notre jeu de données.
+
+```{r}
+file<- 'Formulaire.csv'
+data<-read.csv(file)
+```
+
+
+```{r}
+data
+```
+
+```{r}
+str(data)
+```
+On remarque ici que nos données qualitatives comportent le type "chr". On doit faire des changements de type afin de pouvoir les exploiter.
+```{r}
+data$Horodateur<- as.factor(data$Horodateur)
+data$Budget.d.achat<- as.factor(data$Budget.d.achat)
+data$Genre <- as.factor(data$Genre)
+data$Âge <- as.factor(data$Âge)
+data$Marque <-as.factor(data$Marque)
+data$Catégorie.socio.professionnelle <-as.factor(data$Catégorie.socio.professionnelle)
+```
+
+
+```{r}
+str(data)
+```
+
+```{r}
+summary(data)
+```
+## Fréquence d'achat
+
+Dans cette partie, notre objectif est d'analyser la fréquence d'achat de vêtements et sa relation avec la sensibilité à la mode chez les consommateurs de différents sexes, tranches d'âges, catégorie socio-professionnelle et les marques associées à cette fréquence d'achat.
+
+### 1. Calcul de la matrice centrée réduite
+Centrer et réduire la matrice X
+```{r}
+X=as.matrix(data[,5:11])
+g=colMeans(X)
+g
+```
+
+```{r}
+Y=sweep(x = X,2,g,FUN = '-')
+round(colMeans(X),3)
+```
+Calcul des écarts-types pour réduire les variables.
+```{r}
+n=nrow(X)
+p=ncol(X)
+et=apply(Y,2,function(x) sqrt(sum(x^2)/n))
+et
+```
+Calcul de la matrice des données entrées réduites Z. On vérifie que les variables de cette matrice sont bien de variance égale à 1.
+```{r}
+Z=sweep(x = Y,2,et,FUN = '/')
+colSums(Z^2)/n
+```
+### 2. Calcul de la matrice des corrélations
+Calcul de la matrice des corrélations R=Z′DZ, ses valeurs propres et ses vecteurs propres.
+
+
+```{r}
+M=diag(rep(1,p)) 
+D=(1/n)*diag(rep(1,n))
+R=t(Z)%*%D%*%Z
+vp=eigen(R %*%M)
+lambda=vp$values
+lambda
+```
+
+```{r}
+U=vp$vectors
+U
+```
+Vérifions que les vecteurs propres (i.e. les colonnes de U) sont bien orthornormés.
+```{r}
+round(t(U)%*%U,3)
+```
+### 3. Les Composantes Principales
+
+Calculons la matrice Psi des composantes principales qui est donnée par Psi=Zu. On verifiera que la variance de chaque composante est égale à la valeur propore correspondante.
+```{r}
+Psi=Z%*%U
+Psi
+```
+```{r}
+round(t(Psi)%*%D%*%Psi,3)
+```
+### 4. Les coordonnées des variables sur les axes
+
+Calculons la matrice \(Eta\) des coordonnées des variables sur les axes principaux par \(Eta_\alpha = \sqrt{(\lambda_\alpha)} u_\alpha\).
+```{r}
+Eta<-sweep(U,2,sqrt(lambda),FUN='*')
+Eta 
+```
+## ACP normée avec le package FactoMineR et interprétation de l’ACP.
+Utilisons maintenant la fonction PCA pour retrouver les résultats obtenus précédemment.
+
+* On va ajouter quatre variables qualitatives comme variables supplémentaires : on ajoute les variables “Genre”,"Age", "Catégorie socio-professionnelle" et "Marque" comme variables qualitatives illustratives. Les variables illustratives n’influencent pas la construction des composantes principales de l’analyse.
+
+* Notons que nous utilisons le package factoextra plutôt que FactoMineR pour la qualité de ces graphiques.
+
+### 1. Pertinence de l'ACP
+
+```{r}
+library(corrplot)
+```
+
+```{r}
+X=as.matrix(data[,c(5:11)])
+M<-cor(X)
+library(RColorBrewer)
+corrplot(M, type="upper", order="hclust", 
+         col=brewer.pal(n=8, name="RdBu"))
+```
+
+Execution de la fonction PCA.
+```{r}
+library(factoextra)
+library(FactoMineR)
+```
+
+```{r}
+res.pca=PCA(data[,c(2,3,4,5,6,7,8,9,10,11,12,56)],ncp = 5, quali.sup=c(1,2,3,11,12),graph = F)
+```
+
+### 2. Choix du nombre d'axes à retenir
+Trois critères devront être utlisés : taux d’inertie cumulé, critère de Kaiser et critère du coude.
+
+L’objet eig est une matrice à trois colonnes contenants respectivement les valeurs propres de l’ACP, la proportion de variance de chaque composante et les variance cumulées par les composantes principales.
+
+```{r}
+head(res.pca$eig)
+```
+```{r}
+fviz_screeplot(res.pca, ncp=10)
+```
+
+* Critère de Kaiser: on remarque qu’il y a 2 axes dont les valeurs propres sont supérieures à 1 donc on retient 2 axes d’après ce critère.
+
+* Critère du taux d’inertie cumulée : On remarque que le taux d’inertie cumulé des 2 premiers axes est de 62.08% qui est un taux important compte tenu du fait que nous avons 6 variables : on va donc, d’après ce critère, retenir les 2 premiers axes.
+
+* Critère du coude : On remarque que le coude se trouve au niveau du deuxième axe (voir la figure Scree plot), d’après ce critère, on devrait retenir les 2 premiers axes.
+
+En faisant une sorte de vote des 3 critères on devrait retenir les 2 premiers axes.
+
+
+### 3. Interprétation de la carte des variables
+L’objet var de res.pca contient les 4 objets : coord, cor, cos2 et contrib. A noter que vu que notre ACP est normée, cor (i.e. la corrélations d’une variable avec la composante principale d’un axe) est identique à coord (i.e. la coordonnée de cette variable sur cet axe).
+```{r}
+names(res.pca$var)
+```
+L’objet coord dans var contient les coordonnées des variables.
+```{r}
+res.pca$var$coord
+```
+L’objet cos2 dans var est une matrice dont les lignes représentent le cos carrés de la variable (soit le carrée des coordonnées puisque l’ACP est normée).
+```{r}
+res.pca$var$cos2
+```
+Interprétation de cette première carte des variables (i.e. axes 1 et 2) :
+
+Les deux premières dimensions contiennent 68.63% de l’inertie totale (l’inertie est la variance totale du tableau de données, i.e. la trace de la matrice des corrélations).
+
+On remarque que les variables "Au.moins.une.fois.par.mois","Au.moins.une.fois.tous.les.3.mois",   "Au.moins.une.fois.tous.les.6.mois" et  "Plus.rarement" sont négativement
+corrélées aux variables "Toutes.les.semaines"                 "Au.moins.une.fois.toutes.les.2.semaines",
+"Au.moins.une.fois.par.mois" et "Sensible à la mode".  
+
+Le premier axe oppose les consommateurs qui sont sensibles à la mode et qui font des achats fréquemment à ceux qui réalisent des achats plus rarement. **Si on devait donner un nom à cet axe ça serait l’axe “l'attachement à l'industrie de la mode”.**
+
+```{r}
+fviz_pca_var(res.pca)
+```
+
+
+```{r}
+fviz_pca_var(res.pca, col.var="cos2") +
+  scale_color_gradient2(low="white", mid="blue", 
+                        high="red", midpoint=0.6) + 
+  theme_minimal()
+```
+
+Notons que la qualité de représentation d’une variable sur le premier plan est donnée par la somme de ses cos2 sur chacun des 2 premiers axes.
+
+
+### 3. Interprétation de la carte des individus
+De la même manière, l’objet ind de res.pca contient les objets : coord, cos2 et contrib.
+
+```{r}
+fviz_pca_ind(res.pca,geom = "point",col.ind.sup = 'gray')
+```
+
+```{r}
+fviz_pca_ind(res.pca,geom = "text",col.ind.sup = 'gray')
+```
+
+On distingue ici deux groupes d'individus: ceux qui sont sensibles à la mode et qui réalisent des achats régulièrement et ceux qui ne s'intéressent pas beaucoup à la mode.
+
+```{r}
+fviz_pca_ind(res.pca,geom = "text",col.ind="cos2")+
+scale_color_gradient2(low="blue", mid="white", 
+                      high="red", midpoint=0.5)
+```
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Genre)
+
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Genre)
+```
+
+On peut conclure ici que les femmes sont plus sensibles à la mode et ont tendance à acheter plus fréquemment les vêtements en opposition aux hommes qui 
+donnent moins d'importance à leur style vestimentaire et achètent plus rarement
+des vêtements.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Âge)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Âge)
+```
+
+On remarque ici que la tranche d'âge n'a pas vraiment d'influence sur la fréquence d'achat de vêtements.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Catégorie.socio.professionnelle)
+
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Catégorie.socio.professionnelle)
+```
+
+On remarque ici que les étudiants ont tendance à acheter plus rarement les vêtements. Cela peut être dû au fait qu'ils ne sont pas encore indépendants 
+financièrement.
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Budget.d.achat)
+```
+
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Marque)
+```
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Marque)
+```
+
+On peut conclure ici que la présence de certaines marques n'a aucune influence
+sur la fréquence d'achat des consommateurs. Ce n'est pas parce qu'une certaine 
+marque existe que les consommateurs achètent plus.
+
+## Style Vestimentaire 
+Dans cette partie, notre objectif est d'analyser les styles vestimentaires chez les consommateurs de différents sexes, tranches d'âges ,catégorie socio-professionnelle et les marques associées à ces différents styles.
+
+### 1. Calcul de la matrice centrée réduite
+Centrer et réduire la matrice X
+```{r}
+X=as.matrix(data[,13:23])
+g=colMeans(X)
+g
+```
+```{r}
+Y=sweep(x = X,2,g,FUN = '-')
+round(colMeans(X),3)
+```
+Calcul des écarts-types pour réduire les variables.
+```{r}
+n=nrow(X)
+p=ncol(X)
+et=apply(Y,2,function(x) sqrt(sum(x^2)/n))
+et
+```
+Calcul de la matrice des données entrées réduites Z. On vérifie que les variables de cette matrice sont bien de variance égale à 1.
+```{r}
+Z=sweep(x = Y,2,et,FUN = '/')
+colSums(Z^2)/n
+```
+### 2. Calcul de la matrice des corrélations
+Calcul de la matrice des corrélations R=Z′DZ, ses valeurs propres et ses vecteurs propres.
+```{r}
+M=diag(rep(1,p)) 
+D=(1/n)*diag(rep(1,n))
+R=t(Z)%*%D%*%Z
+vp=eigen(R %*%M)
+lambda=vp$values
+lambda
+```
+```{r}
+U=vp$vectors
+U
+```
+Vérifions que les vecteurs propres (i.e. les colonnes de U) sont bien orthornormés.
+```{r}
+round(t(U)%*%U,3)
+```
+### 3. Les composantes principales
+
+Calculons la matrice Psi des composantes principales qui est donnée par Psi=Zu. On verifiera que la variance de chaque composante est égale à la valeur propore correspondante.
+```{r}
+Psi=Z%*%U
+Psi
+```
+```{r}
+round(t(Psi)%*%D%*%Psi,3)
+```
+
+### 4. Les coordonnées des variables sur les axes
+Calculons la matrice \(Eta\) des coordonnées des variables sur les axes principaux par \(Eta_\alpha = \sqrt{(\lambda_\alpha)} u_\alpha\).
+```{r}
+Eta<-sweep(U,2,sqrt(lambda),FUN='*')
+Eta 
+```
+## ACP normée avec le package FactoMineR et interprétation de l’ACP.
+Utilisons maintenant la fonction PCA pour retrouver les résultats obtenus précédemment.
+
+* On va ajouter quatre variables qualitatives comme variables supplémentaires : on ajoute les variables “Genre”,"Age", "Catégorie socio-professionnelle" et "Marque" comme variables qualitatives illustratives. Les variables illustratives n’influencent pas la construction des composantes principales de l’analyse.
+
+* Notons que nous utilisons le package factoextra plutôt que FactoMineR pour la qualité de ces graphiques.
+
+### 1. Pertinence de l'ACP
+```{r}
+library(corrplot)
+```
+
+```{r}
+X=as.matrix(data[,c(13:23)])
+M<-cor(X)
+library(RColorBrewer)
+corrplot(M, type="upper", order="hclust", 
+         col=brewer.pal(n=8, name="RdBu"))
+```
+
+Execution de la fonction PCA.
+```{r}
+library(FactoMineR)
+res.pca=PCA(data[,c(2,3,4,13,14,15,16,17,18,19,20,21,22,23,56)],ncp = 5,quali.sup = c(1,2,3,15),graph = F)
+```
+
+### 2. Choix du nombre d’axes à retenir
+Trois critères devront être utlisés : taux d’inertie cumulé, critère de Kaiser et critère du coude.
+
+L’objet eig est une matrice à trois colonnes contenants respectivement les valeurs propres de l’ACP, la proportion de variance de chaque composante et les variance cumulées par les composantes principales.
+```{r}
+head(res.pca$eig)
+```
+```{r}
+fviz_screeplot(res.pca, ncp=10)
+```
+
+* Critère de Kaiser: on remarque qu’il y a 3 axes dont les valeurs propres sont supérieures à 1 donc on retient 3 axes d’après ce critère.
+
+* Critère du taux d’inertie cumulée : On remarque que le taux d’inertie cumulé des 2 premiers axes est de 49.89% qui est un taux important compte tenu du fait que nous avons 10 variables : on va donc, d’après ce critère, retenir les 2 premiers axes.
+
+* Critère du coude : On remarque que le coude se trouve au niveau du quatrième axe (voir la figure Scree plot), d’après ce critère, on devrait retenir les 4 premiers axes.
+
+En faisant une sorte de vote des 3 critères on devrait retenir les 2 premiers axes.
+
+### 3. Interprétation de la carte des variables
+L’objet var de res.pca contient les 4 objets : coord, cor, cos2 et contrib. A noter que vu que notre ACP est normée, cor (i.e. la corrélations d’une variable avec la composante principale d’un axe) est identique à coord (i.e. la coordonnée de cette variable sur cet axe).
+```{r}
+names(res.pca$var)
+```
+L’objet coord dans var contient les coordonnées des variables.
+```{r}
+res.pca$var$coord
+```
+L’objet cos2 dans var est une matrice dont les lignes représentent le cos carrés de la variable (soit le carrée des coordonnées puisque l’ACP est normée).
+```{r}
+res.pca$var$cos2
+```
+Interprétation de cette première carte des variables (i.e. axes 1 et 2) :
+Les deux premières dimensions contiennent 49.89% de l’inertie totale (l’inertie est la variance totale du tableau de données, i.e. la trace de la matrice des corrélations).
+
+Les variables "Punk","Rock-n-roll" et punk sont négativement corrélées aux autres variables dans la dimension 2. 
+Le deuxième axe oppose les consommateurs qui ont un style vestimentaire plûtot typique à ceux qui ont un style vestimentaire hors normes. **Si on devait donner un nom à cet axe ça serait "le style vestimentaire”.**
+
+```{r}
+fviz_pca_var(res.pca)
+```
+
+```{r}
+fviz_pca_var(res.pca, col.var="cos2") +
+  scale_color_gradient2(low="white", mid="blue", 
+                        high="red", midpoint=0.6) + 
+  theme_minimal()
+```
+
+Notons que la qualité de représentation d’une variable sur le premier plan est donnée par la somme de ses cos2 sur chacun des 2 premiers axes.
+
+
+### 4. Interprétation de la carte des individus
+De la même manière, l’objet ind de res.pca contient les objets : coord, cos2 et contrib.
+```{r}
+fviz_pca_ind(res.pca,geom = "point",col.ind.sup = 'gray')
+```
+```{r}
+fviz_pca_ind(res.pca,geom = "text",col.ind.sup = 'gray')
+```
+
+On peut ici regrouper les individus en deux groupes : ceux qui ont plutôt un stye "classique" et "chic" et ceux qui ont un style plutôt "punk" et "hip-hop".
+
+```{r}
+library(factoextra)
+fviz_pca_ind(res.pca,geom = "text",col.ind="cos2")+
+scale_color_gradient2(low="blue", mid="white", 
+                      high="red", midpoint=0.5)
+```
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Genre)
+
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Genre)
+```
+
+On remarque ici que les femmes ont tendance à porter les styles vestimentaires "Glamour","Tendance" et "Fashionista" et les hommes portent les styles vestimentaires "Punk","Rock-n-roll" et "Hip-Hop".
+Cela ne peut que refléter les personnalités de chaque sexe et son influence sur les choix vestimentaires.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Âge)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Âge)
+```
+
+Comme la plupart de ceux qui ont répondu au questionnaire sont des jeunes, on ne peut pas vraiment visualiser l'impact de l'âge sur le choix du style vestimentaire.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Catégorie.socio.professionnelle)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Catégorie.socio.professionnelle)
+```
+
+De même, comme la plupart de ceux qui ont répondu au questionnaire sont des étudiants, on ne peut pas visualiser l'impact de la catégorie socio-professionnelle sur le choix du style vestimentaire.
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Marque)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Marque)
+```
+
+On remarque ici que la plupart de ceux qui ont un style "Glamour" et "Chic" achètent de la marque "Zara" alors que ceux qui ont un style plutôt "Hip-Hop" et "Punk" achètent des marque "Adidas" et "Nike".
+Cela ne peut que refléter la nature des vêtements vendus par chacune des marques.
+
+## Les Critères D'achat
+Dans cette partie, notre objectif est d'analyser les critères d'achat chez les consommateurs de différents sexes, tranches d'âges et catégorie socio-professionnelle et les marques associées afin de satisfaire ces critères.
+
+### 1. Calcul de la matrice centrée réduite
+Centrer et réduire la matrice X.
+```{r}
+X=as.matrix(data[,24:44])
+g=colMeans(X)
+g
+```
+
+```{r}
+Y=sweep(x = X,2,g,FUN = '-')
+round(colMeans(X),3)
+```
+Calcul des écarts-types pour réduire les variables.
+```{r}
+n=nrow(X)
+p=ncol(X)
+et=apply(Y,2,function(x) sqrt(sum(x^2)/n))
+et
+```
+Calcul de la matrice des données entrées réduites Z. On vérifie que les variables de cette matrice sont bien de variance égale à 1.
+```{r}
+Z=sweep(x = Y,2,et,FUN = '/')
+colSums(Z^2)/n
+```
+### 2. Calcul de la matrice des corrélations
+Calcul de la matrice des corrélations R=Z′DZ, ses valeurs propres et ses vecteurs propres.
+
+```{r}
+M=diag(rep(1,p)) 
+D=(1/n)*diag(rep(1,n))
+R=t(Z)%*%D%*%Z
+vp=eigen(R %*%M)
+lambda=vp$values
+lambda
+```
+
+```{r}
+U=vp$vectors
+U
+```
+Vérifions que les vecteurs propres (i.e. les colonnes de U) sont bien orthornormés
+
+```{r}
+round(t(U)%*%U,3)
+```
+### 3. Les composantes principales
+
+Calculons la matrice Psi des composantes principales qui est donnée par Psi=Zu. On verifiera que la variance de chaque composante est égale à la valeur propore correspondante.
+```{r}
+Psi=Z%*%U
+Psi
+```
+
+```{r}
+round(t(Psi)%*%D%*%Psi,3)
+```
+
+### 4. Les coordonnées des variables sur les axes
+
+Calculons la matrice \(Eta\) des coordonnées des variables sur les axes principaux par \(Eta_\alpha = \sqrt{(\lambda_\alpha)} u_\alpha\).
+```{r}
+Eta<-sweep(U,2,sqrt(lambda),FUN='*')
+Eta 
+```
+## ACP normée avec le package FactoMineR et interprétation de l’ACP.
+Utilisons maintenant la fonction PCA pour retrouver les résultats obtenus précédemment.
+
+* On va ajouter quatre variables qualitatives comme variables supplémentaires : on ajoute les variables “Genre”,"Age", "Catégorie socio-professionnelle" et "Marque" comme variables qualitatives illustratives. Les variables illustratives n’influencent pas la construction des composantes principales de l’analyse.
+
+* Notons que nous utilisons le package factoextra plutôt que FactoMineR pour la qualité de ces graphiques.
+
+### 1. Pertinence de l'ACP
+```{r}
+library(corrplot)
+X=as.matrix(data[,c(24:44)])
+M<-cor(X)
+library(RColorBrewer)
+corrplot(M, type="upper", order="hclust", 
+         col=brewer.pal(n=8, name="RdBu"),tl.cex=0.5)
+```
+
+Execution de la fonction PCA.
+```{r}
+library(FactoMineR)
+res.pca=PCA(data[,c(2,3,4,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,56)],ncp = 5,quali.sup =c(1,2,3,25),graph = F)
+```
+
+### 2. Choix du nombre d’axes à retenir
+Trois critères devront être utlisés : taux d’inertie cumulé, critère de Kaiser et critère du coude.
+
+L’objet eig est une matrice à trois colonnes contenants respectivement les valeurs propres de l’ACP, la proportion de variance de chaque composante et les variance cumulées par les composantes principales.
+```{r}
+head(res.pca$eig)
+```
+
+```{r}
+library(factoextra)
+fviz_screeplot(res.pca, ncp=10)
+```
+
+* Critère de Kaiser: on remarque qu’il y a 6 axes dont les valeurs propres sont supérieures à 1 donc on retient 6 axes d’après ce critère.
+
+* Critère du taux d’inertie cumulée : On remarque que le taux d’inertie cumulé des 3 premiers axes est de 52.49% qui est un taux important compte tenu du fait que nous avons 21 variables : on va donc, d’après ce critère, retenir les 3 premiers axes.
+
+* Critère du coude : On remarque que le coude se trouve au niveau du deuxième axe (voir la figure Scree plot), d’après ce critère, on devrait retenir les 2 premiers axes.
+
+En faisant une sorte de vote des 3 critères on devrait retenir les 2 premiers axes.
+
+### 3. Interprétation de la carte des variables
+L’objet var de res.pca contient les 4 objets : coord, cor, cos2 et contrib. A noter que vu que notre ACP est normée, cor (i.e. la corrélations d’une variable avec la composante principale d’un axe) est identique à coord (i.e. la coordonnée de cette variable sur cet axe).
+```{r}
+names(res.pca$var)
+```
+L’objet coord dans var contient les coordonnées des variables.
+```{r}
+res.pca$var$coord
+```
+L’objet cos2 dans var est une matrice dont les lignes représentent le cos carrés de la variable (soit le carrée des coordonnées puisque l’ACP est normée).
+
+```{r}
+res.pca$var$cos2
+```
+Interprétation de cette première carte des variables (i.e. axes 1 et 2) :
+
+Les deux premières dimensions contiennent 43.72% de l’inertie totale (l’inertie est la variance totale du tableau de données, i.e. la trace de la matrice des corrélations).
+
+Les variables qui représentent l'expérience d'achat  sont négativement corrélées aux autres variables qui représentent le design du vêtement dans la dimension 2. 
+Le deuxième axe oppose les consommateurs qui donnent importance à la source du vêtement à ceux qui ne s'intéressent qu'à son apparence . **Si on devait donner un nom à cet axe ça serait "les critères d'achat”.**
+
+```{r}
+fviz_pca_var(res.pca)
+```
+
+```{r}
+fviz_pca_var(res.pca, col.var="cos2") +
+  scale_color_gradient2(low="white", mid="blue", 
+                        high="red", midpoint=0.6) + 
+  theme_minimal()
+```
+
+Notons que la qualité de représentation d’une variable sur le premier plan est donnée par la somme de ses cos2 sur chacun des 2 premiers axes.
+
+### 3. Interprétation de la carte des individus
+De la même manière, l’objet ind de res.pca contient les objets : coord, cos2 et contrib.
+
+```{r}
+fviz_pca_ind(res.pca,geom = "point",col.ind.sup = 'gray')
+```
+
+```{r}
+fviz_pca_ind(res.pca,geom = "text",col.ind.sup = 'gray')
+```
+
+On peut ici regrouper les individus dans deux groupes : un groupe qui fait attention aux détails du vêtement : l'expérience d'achat, le lieu de fabrication.. et il y a un autre groupe qui s'intéresse plutôt à l'apparence du vêtement et sa qualité.
+
+```{r}
+fviz_pca_ind(res.pca,geom = "text",col.ind="cos2")+
+scale_color_gradient2(low="blue", mid="white", 
+                      high="red", midpoint=0.5)
+
+```
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Genre)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Genre)
+```
+
+On remarque ici que la plupart des femmes font attention aux détails du vêtement : son expérience d'achat et l'histoire de son fabrication. Alors que les hommes généralement s'intéressent seulement au produit final.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Âge)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Âge)
+```
+
+Comme la tranche d'âge dominante est 18-24, on ne peut pas vraiment faire des conclusions.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Catégorie.socio.professionnelle)
+```
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Catégorie.socio.professionnelle)
+```
+
+De même, comme la plupart de ceux qui ont répondu au questionnaire sont des étudiants, on ne peut pas vraiment avoir des conclusions.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Marque)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Marque)
+```
+
+On peut conclure ici que l'achat d'une certaine marque est pour répondre aux besoins des individus. Par exemple la plupart de ceux qui s'intéressent à l'apparence du vêtement achètent des marques "Zara","Stradivarius", "Pull&Bear" et "H&M".
+
+## Fréquence d'achat d'un vêtement
+Cette partie a pour objectif comprendre les vêtements les plus achetés chez les consommateurs de différents sexes, tranches d'âges et catégorie socio-professionnelle et d'où ils les achètent généralement.
+
+### 1. Calcul de la matrice centrée réduite
+
+Centrer et réduire la matrice X
+
+```{r}
+X=as.matrix(data[,45:55])
+g=colMeans(X)
+g
+```
+
+```{r}
+Y=sweep(x = X,2,g,FUN = '-')
+round(colMeans(X),3)
+```
+Calcul des écarts-types pour réduire les variables.
+```{r}
+n=nrow(X)
+p=ncol(X)
+et=apply(Y,2,function(x) sqrt(sum(x^2)/n))
+et
+```
+
+Calcul de la matrice des données entrées réduites \(Z\). On vérifie que les variables de cette matrice sont bien de variance égale à 1.
+```{r}
+Z=sweep(x = Y,2,et,FUN = '/')
+colSums(Z^2)/n
+```
+
+### 2. Calcul de la matrice des corrélations
+Calcul de la matrice des corrélations \(R=Z'DZ\), ses valeurs propres et ses vecteurs propres.
+```{r}
+M=diag(rep(1,p)) 
+D=(1/n)*diag(rep(1,n))
+R=t(Z)%*%D%*%Z
+vp=eigen(R %*%M)
+lambda=vp$values
+lambda
+```
+
+```{r}
+U=vp$vectors
+U
+```
+Vérifions que les vecteurs propres (i.e. les colonnes de \(U\)) sont bien orthornormés.
+```{r}
+round(t(U)%*%U,3)
+```
+### 3. Les composantes principales
+Calculons la matrice \(Psi\) des composantes principales qui est donnée par \(Psi=Zu\). On verifiera que la variance de chaque composante est égale à la valeur propore correspondante.
+```{r}
+Psi=Z%*%U
+Psi
+```
+
+```{r}
+round(t(Psi)%*%D%*%Psi,3)
+```
+### 4. Les coordonnées des variables sur les axes
+Calculons la matrice \(Eta\) des coordonnées des variables sur les axes principaux par \(Eta_\alpha = \sqrt{(\lambda_\alpha)} u_\alpha\).
+```{r}
+Eta<-sweep(U,2,sqrt(lambda),FUN='*')
+Eta 
+```
+## ACP normée avec le package FactoMineR et interprétation de l’ACP.
+Utilisons maintenant la fonction PCA pour retrouver les résultats obtenus précédemment.
+
+* On va ajouter quatre variables qualitatives comme variables supplémentaires : on ajoute les variables “Genre”,"Age", "Catégorie socio-professionnelle" et "Marque" comme variables qualitatives illustratives. Les variables illustratives n’influencent pas la construction des composantes principales de l’analyse.
+
+* Notons que nous utilisons le package factoextra plutôt que FactoMineR pour la qualité de ces graphiques.
+
+### 1. Pertinence de l'ACP
+```{r}
+library(corrplot)
+X=as.matrix(data[,c(45:55)])
+M<-cor(X)
+library(RColorBrewer)
+corrplot(M, type="upper", order="hclust", 
+         col=brewer.pal(n=8, name="RdBu"))
+
+```
+
+Execution de la fonction PCA.
+```{r}
+library(FactoMineR)
+res.pca=PCA(data[,c(2,3,4,45,46,47,48,49,50,51,52,53,54,55,56)],ncp = 5,quali.sup=c(1,2,3,15),graph = F)
+```
+
+### 2. Choix du nombre d’axes à retenir
+Trois critères devront être utlisés : taux d’inertie cumulé, critère de Kaiser et critère du coude.
+
+L’objet \(\tt eig\) est une matrice à trois colonnes contenants respectivement les valeurs propres de l’ACP, la proportion de variance de chaque composante et les variance cumulées par les composantes principales.
+
+```{r}
+head(res.pca$eig)
+```
+
+```{r}
+fviz_screeplot(res.pca, ncp=10)
+```
+
+* Critère de Kaiser: on remarque qu’il y a 2 axes dont les valeurs propres sont supérieures à 1 donc on retient 2 axes d’après ce critère.
+
+* Critère du taux d’inertie cumulée : On remarque que le taux d’inertie cumulé des 2 premiers axes est de 55.32% qui est un taux important compte tenu du fait que nous avons 21 variables : on va donc, d’après ce critère, retenir les 2 premiers axes.
+
+* Critère du coude : On remarque que le coude se trouve au niveau du deuxième axe (voir la figure Scree plot), d’après ce critère, on devrait retenir les 2 premiers axes.
+
+En faisant une sorte de vote des 3 critères on devrait retenir les 2 premiers axes.
+
+### 3. Interprétation de la carte des variables
+L’objet \(\tt var\) de \(\tt res.pca\) contient les 4 objets : \(\tt coord\), \(\tt cor\), \(\tt cos2\) et \(\tt contrib\). A noter que vu que notre ACP est normée, \(\tt cor\) (i.e. la corrélations d’une variable avec la composante principale d’un axe) est identique à \(\tt coord\) (i.e. la coordonnée de cette variable sur cet axe).
+```{r}
+res.pca$var$coord
+```
+L’objet \(\tt cos2\) dans \(\tt var\) est une matrice dont les lignes représentent le cos carrés de la variable (soit le carrée des coordonnées puisque l’ACP est normée).
+```{r}
+res.pca$var$cos2
+```
+Interprétation de cette première carte des variables (i.e. axes 1 et 2) :
+
+Les deux premières dimensions contiennent 55.34% de l’inertie totale (l’inertie est la variance totale du tableau de données, i.e. la trace de la matrice des corrélations).
+
+Les variables qui représentent les vêtements de tous les jours  sont négativement corrélées aux autres variables qui représentent les vêtements les plus posés la dimension 2. 
+Le deuxième axe oppose les consommateurs qui ont un style plutôt casual aux consommateurs qui ont un style plus posé. **Si on devait donner un nom à cet axe ça serait "les vêtements des consommateurs”.**
+
+```{r}
+fviz_pca_var(res.pca)
+```
+
+```{r}
+fviz_pca_var(res.pca, col.var="cos2") +
+  scale_color_gradient2(low="white", mid="blue", 
+                        high="red", midpoint=0.6) + 
+  theme_minimal()
+```
+
+Notons que la qualité de représentation d’une variable sur le premier plan est donnée par la somme de ses cos2 sur chacun des 2 premiers axes.
+
+### 3. Interprétation de la carte des individus
+
+De la même manière, l’objet \(\tt ind\) de \(\tt res.pca\) contient les objets : \(\tt coord\), \(\tt cos2\) et \(\tt contrib\).
+```{r}
+fviz_pca_ind(res.pca,geom = "point",col.ind.sup = 'gray')
+```
+```{r}
+fviz_pca_ind(res.pca,geom = "text",col.ind.sup = 'gray')
+```
+
+On peut regrouper les individus en deux groupes: ceux qui ont un style plutôt casual et ceux qui ont un style plus posé.
+
+```{r}
+fviz_pca_ind(res.pca,geom = "text",col.ind="cos2")+
+scale_color_gradient2(low="blue", mid="white", 
+                      high="red", midpoint=0.5)
+```
+
+Notons que la qualité de représentation d’un individu sur le premier plan est donnée par la somme de ses cos2 sur chacun des 2 premiers axes.
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Genre)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Genre)
+```
+
+On peut remarquer ici que la plupart des hommes ont un style plutôt casual comme les "Tee-shirt/Polo" et "Short". Alors que les femmes aiment plutôt un style posé. Elles achètent les "Chemises" et les "Pantalons". On peut conclure que les hommes préfèrent les vêtements de tous les jours et ne donnet pas importance à leur apparence alors que les femmes prennent plus de soin de leur apparence.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Âge)
+```
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Âge)
+```
+
+On peut voir ici que les jeunes ont tendance à acheter des vêtements casual comme les "Tee-shirt/Polo", "Jogging/Legging" et les "Shorts". Ceci peut être expliqué par leur nature et leur âge qui ont une allure plus sportive que les autres tranches d'âge.
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Catégorie.socio.professionnelle)
+```
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Catégorie.socio.professionnelle)
+```
+
+De même, comme le biplot relié aux tranches d'âge, les étudiants et les lycéens
+ont tendance à acheter des vêtements casual comme les "Tee-shirt/Polo", "Jogging/Legging" et les "Shorts".
+
+```{r}
+fviz_pca_ind(res.pca, label="none", habillage=data$Marque)
+```
+
+
+```{r}
+fviz_pca_biplot(res.pca,habillage=data$Marque)
+```
+
+On peut voir ici que les vêtements sportifs viennent généralement des marques "Nike" et "Adidas" et les vêtements plutôt classiques viennet par exemple de la marque "Zara".
+
+# Conclusion Générale
+
+Pour conclure, le but de ce projet est d'analyser le comportement du consommateur tunisien et comprendre ses choix à propos sa fréquence d'achat,son style vestimentaire, les vêtements qu'il achètent et les critères de ces achats.
+
+Grâce à cette analyse, les comportements de nos consommateurs sont catégorisés en plusieurs groupes en relation avec leurs genres,leurs âges,leurs catégories socio-professionnelles. 
+
+Un autre objectif de cette analyse est de grouper les individus de chaque marque qui existe en Tunisie afin de comprendre leurs comportements.
